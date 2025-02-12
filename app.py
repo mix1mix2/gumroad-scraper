@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import streamlit as st
+import time
 
 # Streamlit UI
 st.title("Gumroad Product Scraper")
@@ -9,26 +10,44 @@ st.write("Enter your Gumroad store link below to scrape product details.")
 
 store_url = st.text_input("Gumroad Store URL", "https://plrmix.gumroad.com/")
 
-def scrape_gumroad_products(store_url):
+def get_all_pages(store_url):
+    """Retrieve all pagination links for the store."""
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
     response = requests.get(store_url, headers=headers)
     if response.status_code != 200:
-        st.error("Failed to retrieve page")
         return []
     
     soup = BeautifulSoup(response.text, "html.parser")
+    pages = [store_url]
     
-    # Find product links dynamically
-    product_links = []
-    for a_tag in soup.find_all("a", href=True):
-        href = a_tag["href"]
-        if "gumroad.com/l/" in href:  # Detect Gumroad product links
-            if not href.startswith("http"):
-                href = "https://gumroad.com" + href
-            product_links.append(href)
+    # Find pagination links (if any)
+    pagination_links = soup.find_all("a", href=True)
+    for link in pagination_links:
+        href = link["href"]
+        if "page=" in href and href not in pages:
+            pages.append(href if href.startswith("http") else store_url + href)
+    
+    return pages
+
+def scrape_gumroad_products(store_url):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+    all_pages = get_all_pages(store_url)
+    
+    product_links = set()
+    for page in all_pages:
+        response = requests.get(page, headers=headers)
+        if response.status_code != 200:
+            continue
+        
+        soup = BeautifulSoup(response.text, "html.parser")
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+            if "gumroad.com/l/" in href:
+                product_links.add(href if href.startswith("http") else "https://gumroad.com" + href)
+        time.sleep(1)  # Avoid overloading the server
     
     products = []
-    for link in set(product_links):  # Remove duplicates
+    for link in product_links:
         product_response = requests.get(link, headers=headers)
         if product_response.status_code == 200:
             product_soup = BeautifulSoup(product_response.text, "html.parser")
@@ -48,8 +67,44 @@ def scrape_gumroad_products(store_url):
                 "image_link": image,
                 "price": price,
                 "availability": "in stock",
+                "item_group_id": "",
                 "product_type": "Digital Product",
+                "google_product_category": "",
+                "additional_image_link": "",
+                "sale_price": "",
+                "average_review_rating": "",
+                "number_of_ratings": "",
+                "number_of_reviews": "",
+                "description_html": "",
+                "video_link": "",
                 "brand": "PLRmix",
+                "GTIN": "",
+                "mpn": "",
+                "color": "",
+                "gender": "",
+                "age_group": "",
+                "material": "",
+                "pattern": "",
+                "size": "",
+                "size_type": "",
+                "size_system": "",
+                "alt_text": "",
+                "variant_names": "",
+                "variant_values": "",
+                "adult": "",
+                "tax": "",
+                "shipping": "",
+                "shipping_weight": "",
+                "shipping_width": "",
+                "shipping_height": "",
+                "free_shipping_label": "",
+                "free_shipping_limit": "",
+                "custom_label_0": "",
+                "custom_label_1": "",
+                "custom_label_2": "",
+                "custom_label_3": "",
+                "custom_label_4": "",
+                "ad_link": "",
                 "condition": "new"
             })
     
