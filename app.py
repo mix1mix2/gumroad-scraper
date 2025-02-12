@@ -9,37 +9,36 @@ st.write("Enter your Gumroad store link below to scrape product details.")
 
 store_url = st.text_input("Gumroad Store URL", "https://plrmix.gumroad.com/")
 
-if st.button("Scrape Products"):
-    def scrape_gumroad_products(store_url):
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-        response = requests.get(store_url, headers=headers)
-        if response.status_code != 200:
-            st.error("Failed to retrieve page")
-            return []
-        
-        soup = BeautifulSoup(response.text, "html.parser")
-        
-        # Find product listings
-        products = []
-        for product in soup.find_all("div", class_="product-card") or soup.find_all("div", class_="product-item"):
-            title = product.find("h2").text.strip() if product.find("h2") else "N/A"
-            link_tag = product.find("a")
-            link = link_tag["href"] if link_tag and "href" in link_tag.attrs else "N/A"
-            if link and not link.startswith("http"):
-                link = "https://gumroad.com" + link
-            image = product.find("img")["src"] if product.find("img") else "N/A"
-            
-            # Get product details from individual page
-            product_response = requests.get(link, headers=headers)
-            if product_response.status_code == 200:
-                product_soup = BeautifulSoup(product_response.text, "html.parser")
-                description = product_soup.find("meta", {"name": "description"})
-                description = description["content"] if description else "N/A"
-                
-                price = product_soup.find("span", class_="gumroad__product-price")
-                price = price.text.strip() if price else "Free"
-            else:
-                description, price = "N/A", "N/A"
+def scrape_gumroad_products(store_url):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+    response = requests.get(store_url, headers=headers)
+    if response.status_code != 200:
+        st.error("Failed to retrieve page")
+        return []
+    
+    soup = BeautifulSoup(response.text, "html.parser")
+    
+    # Find product links dynamically
+    product_links = []
+    for a_tag in soup.find_all("a", href=True):
+        href = a_tag["href"]
+        if "gumroad.com/l/" in href:  # Detect Gumroad product links
+            if not href.startswith("http"):
+                href = "https://gumroad.com" + href
+            product_links.append(href)
+    
+    products = []
+    for link in set(product_links):  # Remove duplicates
+        product_response = requests.get(link, headers=headers)
+        if product_response.status_code == 200:
+            product_soup = BeautifulSoup(product_response.text, "html.parser")
+            title = product_soup.find("title").text.strip() if product_soup.find("title") else "N/A"
+            description = product_soup.find("meta", {"name": "description"})
+            description = description["content"] if description else "N/A"
+            image = product_soup.find("meta", {"property": "og:image"})
+            image = image["content"] if image else "N/A"
+            price = product_soup.find("span", class_="price")
+            price = price.text.strip() if price else "Free"
             
             products.append({
                 "id": title.replace(" ", "_").lower(),
@@ -53,9 +52,10 @@ if st.button("Scrape Products"):
                 "brand": "PLRmix",
                 "condition": "new"
             })
-        
-        return products
     
+    return products
+
+if st.button("Scrape Products"):
     data = scrape_gumroad_products(store_url)
     df = pd.DataFrame(data)
     
