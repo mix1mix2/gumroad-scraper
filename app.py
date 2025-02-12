@@ -14,8 +14,9 @@ def scrape_all_products(store_url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
     product_links = []
     page = 1
+    max_pages = 10  # Prevent infinite loop
     
-    while True:
+    while page <= max_pages:
         response = requests.get(f"{store_url}?page={page}", headers=headers)
         if response.status_code != 200:
             break
