@@ -11,7 +11,8 @@ store_url = st.text_input("Gumroad Store URL", "https://plrmix.gumroad.com/")
 
 if st.button("Scrape Products"):
     def scrape_gumroad_products(store_url):
-        response = requests.get(store_url)
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        response = requests.get(store_url, headers=headers)
         if response.status_code != 200:
             st.error("Failed to retrieve page")
             return []
@@ -20,19 +21,22 @@ if st.button("Scrape Products"):
         
         # Find product listings
         products = []
-        for product in soup.find_all("div", class_="product-card"):  # Adjust class name if needed
+        for product in soup.find_all("div", class_="product-card") or soup.find_all("div", class_="product-item"):
             title = product.find("h2").text.strip() if product.find("h2") else "N/A"
-            link = product.find("a")["href"] if product.find("a") else "N/A"
+            link_tag = product.find("a")
+            link = link_tag["href"] if link_tag and "href" in link_tag.attrs else "N/A"
+            if link and not link.startswith("http"):
+                link = "https://gumroad.com" + link
             image = product.find("img")["src"] if product.find("img") else "N/A"
             
             # Get product details from individual page
-            product_response = requests.get(link)
+            product_response = requests.get(link, headers=headers)
             if product_response.status_code == 200:
                 product_soup = BeautifulSoup(product_response.text, "html.parser")
                 description = product_soup.find("meta", {"name": "description"})
                 description = description["content"] if description else "N/A"
                 
-                price = product_soup.find("span", class_="price")
+                price = product_soup.find("span", class_="gumroad__product-price")
                 price = price.text.strip() if price else "Free"
             else:
                 description, price = "N/A", "N/A"
@@ -64,4 +68,4 @@ if st.button("Scrape Products"):
             mime="text/csv"
         )
     else:
-        st.warning("No products found or an error occurred.")
+        st.warning("No products found. Ensure your Gumroad store URL is correct and public.")
