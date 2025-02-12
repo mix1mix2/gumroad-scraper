@@ -10,44 +10,31 @@ st.write("Enter your Gumroad store link below to scrape product details.")
 
 store_url = st.text_input("Gumroad Store URL", "https://plrmix.gumroad.com/")
 
-def get_all_pages(store_url):
-    """Retrieve all pagination links for the store."""
+def scrape_all_products(store_url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-    response = requests.get(store_url, headers=headers)
-    if response.status_code != 200:
-        return []
+    product_links = []
+    page = 1
     
-    soup = BeautifulSoup(response.text, "html.parser")
-    pages = [store_url]
-    
-    # Find pagination links (if any)
-    pagination_links = soup.find_all("a", href=True)
-    for link in pagination_links:
-        href = link["href"]
-        if "page=" in href and href not in pages:
-            pages.append(href if href.startswith("http") else store_url + href)
-    
-    return pages
-
-def scrape_gumroad_products(store_url):
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-    all_pages = get_all_pages(store_url)
-    
-    product_links = set()
-    for page in all_pages:
-        response = requests.get(page, headers=headers)
+    while True:
+        response = requests.get(f"{store_url}?page={page}", headers=headers)
         if response.status_code != 200:
-            continue
+            break
         
         soup = BeautifulSoup(response.text, "html.parser")
-        for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"]
-            if "gumroad.com/l/" in href:
-                product_links.add(href if href.startswith("http") else "https://gumroad.com" + href)
+        product_cards = soup.find_all("a", href=True)
+        new_links = ["https://gumroad.com" + a["href"] if not a["href"].startswith("http") else a["href"] for a in product_cards if "gumroad.com/l/" in a["href"]]
+        
+        if not new_links:
+            break
+        
+        product_links.extend(new_links)
+        page += 1
         time.sleep(1)  # Avoid overloading the server
     
+    product_links = list(dict.fromkeys(product_links))  # Remove duplicates
     products = []
-    for link in product_links:
+    
+    for link in reversed(product_links):  # Reverse list to get oldest first
         product_response = requests.get(link, headers=headers)
         if product_response.status_code == 200:
             product_soup = BeautifulSoup(product_response.text, "html.parser")
@@ -111,7 +98,7 @@ def scrape_gumroad_products(store_url):
     return products
 
 if st.button("Scrape Products"):
-    data = scrape_gumroad_products(store_url)
+    data = scrape_all_products(store_url)
     df = pd.DataFrame(data)
     
     if not df.empty:
